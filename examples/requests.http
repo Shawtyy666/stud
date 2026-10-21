@@ -1,0 +1,37 @@
+@base = http://127.0.0.1:8000
+
+### Импорт 215 строк из поставляемого CSV
+POST {{base}}/students/import
+
+### Все записи (лимит по умолчанию 100)
+GET {{base}}/students?limit=1000
+
+### Студенты факультета (кириллица кодируется клиентом)
+GET {{base}}/students?faculty=АВТФ&limit=1000
+
+### Уникальные предметы
+GET {{base}}/courses
+
+### Оценки строго ниже 30
+GET {{base}}/students/below-30?course=Мат.%20Анализ&limit=1000
+
+### Средний балл по факультету
+GET {{base}}/faculties/average-score?faculty=АВТФ
+
+### Создать запись
+POST {{base}}/students
+Content-Type: application/json
+
+{"last_name":"Иванов","first_name":"Иван","faculty":"АВТФ","course":"Физика","score":75}
+
+### Получить запись (замените 1 на нужный id)
+GET {{base}}/students/1
+
+### Полностью обновить запись
+PUT {{base}}/students/1
+Content-Type: application/json
+
+{"last_name":"Иванов","first_name":"Иван","faculty":"АВТФ","course":"Физика","score":90}
+
+### Удалить запись
+DELETE {{base}}/students/1

@@ -1,6 +1,6 @@
-# Студенты: CRUD на FastAPI, SQLAlchemy и Alembic
+# Студенты: CRUD и авторизация на FastAPI, SQLAlchemy и Alembic
 
-Учебное API для работы с результатами студентов из `students.csv`. Используются Python 3.10+, FastAPI, Pydantic 2, SQLAlchemy 2 и Alembic. База данных — SQLite, отдельный сервер БД не нужен.
+Учебное API с регистрацией, входом, выходом и защищёнными CRUD-операциями для работы с результатами студентов из `students.csv`. Используются Python 3.10+, FastAPI, Pydantic 2, SQLAlchemy 2 и Alembic. База данных — SQLite, отдельный сервер БД не нужен.
 
 ## Модель данных
 
@@ -47,12 +47,37 @@ macOS / Linux:
 
 Ожидаемый результат первого импорта: `{"imported": 215, "already_imported": false}`. Файл `students.db` создаётся в папке проекта. Данные сохраняются после перезапуска сервера. Таблицы создаёт Alembic: перед первым запуском обязательно выполните `upgrade head`.
 
-Откройте http://127.0.0.1:8000/docs и воспользуйтесь **Try it out**. Остановка сервера — Ctrl+C. Вместо импорта через терминал можно вызвать `POST /students/import`: он загрузит включённый в проект `data/students.csv`.
+Откройте http://127.0.0.1:8000/docs и воспользуйтесь **Try it out**. Остановка сервера — Ctrl+C. Вместо импорта через терминал можно вызвать `POST /students/import` с Bearer-токеном: он загрузит включённый в проект `data/students.csv`.
+
+## Авторизация (user_token)
+
+Для всех маршрутов работы с данными необходим токен зарегистрированного пользователя. Открытыми остаются `/auth/register`, `/auth/login`, `/auth/logout` (для выхода нужен токен), а также Swagger UI `/docs` и схема `/openapi.json`.
+
+1. `POST /auth/register` — регистрация по `username` и `password` (минимум 8 символов пароля).
+2. `POST /auth/login` — вход с теми же данными. В ответе возвращается `user_token`.
+3. Передавайте токен в заголовке `Authorization: Bearer <user_token>`.
+4. `POST /auth/logout` с тем же заголовком — выход: сессия удаляется и повторное использование токена возвращает HTTP 401.
+
+Пример:
+
+```bash
+curl -X POST http://127.0.0.1:8000/auth/register -H "Content-Type: application/json" -d '{"username":"student1","password":"example-password-123"}'
+curl -X POST http://127.0.0.1:8000/auth/login -H "Content-Type: application/json" -d '{"username":"student1","password":"example-password-123"}'
+curl http://127.0.0.1:8000/students -H "Authorization: Bearer ВАШ_ТОКЕН"
+curl -X POST http://127.0.0.1:8000/auth/logout -H "Authorization: Bearer ВАШ_ТОКЕН"
+```
+
+Пароли не хранятся открытым текстом: используется PBKDF2-SHA256 с уникальной солью. Токены генерируются случайным образом; база хранит только SHA-256 токена. Срок действия — 24 часа, выход отзывает токен досрочно. Отсутствие/неверный/истёкший токен возвращает HTTP 401. Роль только для чтения и refresh-токены в этой версии не реализованы.
+
+После обновления существующей базы выполните `python -m alembic upgrade head`: миграция `0002` добавляет таблицы `users` и `user_sessions`. Существующие записи студентов сохраняются.
 
 ## Эндпоинты
 
 | Метод | Путь | Действие |
 |---|---|---|
+| POST | `/auth/register` | Создать пользователя |
+| POST | `/auth/login` | Получить токен доступа |
+| POST | `/auth/logout` | Отозвать текущий токен |
 | POST | `/students` | INSERT: создание записи, ответ 201 |
 | GET | `/students` | SELECT: список записей |
 | GET | `/students/{student_id}` | SELECT: запись по ID |

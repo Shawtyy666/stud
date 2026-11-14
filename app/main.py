@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Path as ApiPath, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
 from app.auth import make_auth_router, validate_token
@@ -136,6 +137,25 @@ def create_app(url: str | None = None, csv_path: Path | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Факультет не найден")
         return result
 
+    def openapi_with_bearer():
+        if application.openapi_schema is None:
+            schema = get_openapi(
+                title=application.title,
+                version=application.version,
+                routes=application.routes,
+            )
+            schema.setdefault("components", {}).setdefault("securitySchemes", {})["BearerAuth"] = {
+                "type": "http", "scheme": "bearer"
+            }
+            for path, methods in schema["paths"].items():
+                if not path.startswith("/auth/"):
+                    for operation in methods.values():
+                        if isinstance(operation, dict):
+                            operation["security"] = [{"BearerAuth": []}]
+            application.openapi_schema = schema
+        return application.openapi_schema
+
+    application.openapi = openapi_with_bearer
     return application
 
 

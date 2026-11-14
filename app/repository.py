@@ -44,6 +44,10 @@ class StudentRepository:
         self.session.commit()
         return True
 
+    def export_rows(self) -> list[Student]:
+        """Все записи для CSV без ограничения пагинации."""
+        return list(self.session.scalars(select(Student).order_by(Student.id)))
+
     def courses(self) -> list[str]:
         return list(self.session.scalars(select(Student.course).distinct().order_by(Student.course)))
 

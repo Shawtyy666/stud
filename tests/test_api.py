@@ -110,6 +110,30 @@ def test_import_and_real_data_queries(client):
         assert len(rows) == sum(r["Курс"] == course and int(r["Оценка"]) < 30 for r in source)
 
 
+def test_csv_export_roundtrip(client, student):
+    empty = client.get("/students/export")
+    assert empty.status_code == 200
+    assert list(csv.DictReader(empty.content.decode("utf-8-sig").splitlines())) == []
+
+    assert client.post("/students/import").status_code == 200
+    response = client.get("/students/export")
+    assert response.status_code == 200
+    assert "attachment" in response.headers["content-disposition"]
+    rows = list(csv.DictReader(response.content.decode("utf-8-sig").splitlines()))
+    assert len(rows) == 215
+    assert list(rows[0]) == ["Фамилия", "Имя", "Факультет", "Курс", "Оценка"]
+    with CSV_PATH.open(encoding="utf-8-sig", newline="") as source_file:
+        source_rows = list(csv.DictReader(source_file))
+    assert Counter(tuple(row.items()) for row in rows) == Counter(
+        tuple(row.items()) for row in source_rows
+    )
+
+    created = client.post("/students", json=student).json()
+    assert len(list(csv.DictReader(client.get("/students/export").content.decode("utf-8-sig").splitlines()))) == 216
+    assert client.delete(f"/students/{created['id']}").status_code == 204
+    assert len(list(csv.DictReader(client.get("/students/export").content.decode("utf-8-sig").splitlines()))) == 215
+
+
 def test_pagination(client):
     client.post("/students/import")
     first = client.get("/students", params={"limit": 2}).json()

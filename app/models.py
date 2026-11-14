@@ -1,4 +1,4 @@
-from sqlalchemy import CheckConstraint, Integer, String
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -48,5 +48,5 @@ class UserSession(Base):
     __tablename__ = "user_sessions"
 
     token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     expires_at: Mapped[int] = mapped_column(Integer, nullable=False)

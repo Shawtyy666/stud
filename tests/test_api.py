@@ -31,6 +31,14 @@ def database(tmp_path, monkeypatch):
 @pytest.fixture
 def client(database):
     with TestClient(create_app(database[0])) as client:
+        assert client.post("/auth/register", json={
+            "username": "testuser", "password": "test-password-123"
+        }).status_code == 201
+        login = client.post("/auth/login", json={
+            "username": "testuser", "password": "test-password-123"
+        })
+        assert login.status_code == 200
+        client.headers.update({"Authorization": f"Bearer {login.json()['user_token']}"})
         yield client
 
 
@@ -146,6 +154,11 @@ def test_bad_import_is_atomic(database, tmp_path):
     file = tmp_path / "bad.csv"
     file.write_text("Фамилия,Имя,Факультет,Курс,Оценка\nЛи,Иван,АВТФ,Физика,20\nКим,Петр,ФПМИ,Физика,101\n", encoding="utf-8")
     with TestClient(create_app(database[0], file)) as client:
+        client.post("/auth/register", json={"username": "importer", "password": "test-password-123"})
+        token = client.post("/auth/login", json={
+            "username": "importer", "password": "test-password-123"
+        }).json()["user_token"]
+        client.headers.update({"Authorization": f"Bearer {token}"})
         assert client.post("/students/import").status_code == 400
         assert client.get("/students").json() == []
         file.write_text("Фамилия,Имя,Факультет,Курс,Оценка\nЛи,Иван,АВТФ,Физика,20\n", encoding="utf-8")
@@ -183,3 +196,44 @@ def test_empty_and_validation(client):
     for path in ("/students?limit=0", "/students?offset=-1", "/students?limit=1001", "/students/below-30", "/students/0"):
         assert client.get(path).status_code == 422
     assert client.get("/docs").status_code == 200
+
+
+def test_auth_access_and_logout(database, student):
+    with TestClient(create_app(database[0])) as api:
+        paths = ["/", "/students", "/students/1", "/students/export",
+                 "/students/import", "/students/below-30?course=Физика",
+                 "/courses", "/faculties/average-score?faculty=АВТФ"]
+        for path in paths:
+            assert api.get(path).status_code == 401
+        for path in ("/students", "/students/import"):
+            assert api.post(path, json=student).status_code == 401
+        assert api.put("/students/1", json=student).status_code == 401
+        assert api.delete("/students/1").status_code == 401
+        assert api.get("/docs").status_code == 200
+        user = {"username": "alice", "password": "secret-password-123"}
+        register = api.post("/auth/register", json=user)
+        assert register.status_code == 201
+        assert "password" not in register.json()
+        assert api.post("/auth/register", json=user).status_code == 409
+        assert api.post("/auth/login", json={**user, "password": "wrongpass"}).status_code == 401
+        login = api.post("/auth/login", json=user)
+        assert login.status_code == 200
+        token = login.json()["user_token"]
+        api.headers.update({"Authorization": f"Bearer {token}"})
+        assert api.get("/students").status_code == 200
+        assert api.post("/students", json=student).status_code == 201
+        assert api.post("/auth/logout").status_code == 204
+        assert api.get("/students").status_code == 401
+        assert api.post("/auth/logout").status_code == 401
+        assert api.post("/auth/login", json=user).status_code == 200
+
+
+def test_auth_input_validation(database):
+    with TestClient(create_app(database[0])) as api:
+        for user in [
+            {"username": "ab", "password": "long-enough"},
+            {"username": "bad user", "password": "long-enough"},
+            {"username": "okay", "password": "short"},
+        ]:
+            assert api.post("/auth/register", json=user).status_code == 422
+        assert api.get("/students", headers={"Authorization": "Bearer invalid"}).status_code == 401

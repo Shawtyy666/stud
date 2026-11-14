@@ -1,3 +1,5 @@
+import csv
+import io
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
@@ -7,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.config import CSV_PATH, database_url
-from app.csv_import import CsvImportError, import_students_from_csv
+from app.csv_import import HEADERS, CsvImportError, import_students_from_csv
 from app.database import make_engine, make_session_factory
 from app.repository import StudentRepository
 from app.schemas import FacultyAverage, ImportResult, StudentCreate, StudentRead
@@ -52,6 +54,26 @@ def create_app(url: str | None = None, csv_path: Path | None = None) -> FastAPI:
             return import_students_from_csv(repository, csv_path or CSV_PATH)
         except CsvImportError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @application.get("/students/export", tags=["CSV"])
+    def export_csv(repository: Repository):
+        """Скачать все записи в формате исходного students.csv."""
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        writer.writerow(HEADERS)
+        for student in repository.export_rows():
+            writer.writerow([
+                student.last_name,
+                student.first_name,
+                student.faculty,
+                student.course,
+                student.score,
+            ])
+        return Response(
+            content=output.getvalue().encode("utf-8-sig"),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="students.csv"'},
+        )
 
     @application.get("/students/below-30", response_model=list[StudentRead], tags=["Выборки"])
     def below_30(course: Filter, repository: Repository, offset: Offset = 0, limit: Limit = 100):

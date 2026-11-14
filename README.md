@@ -55,7 +55,7 @@ macOS / Linux:
 
 1. `POST /auth/register` — регистрация по `username` и `password` (минимум 8 символов пароля).
 2. `POST /auth/login` — вход с теми же данными. В ответе возвращается `user_token`.
-3. Передавайте токен в заголовке `Authorization: Bearer <user_token>`.
+3. Передавайте токен в заголовке `Authorization: Bearer <user_token>`. В Swagger UI (`/docs`) нажмите **Authorize** и вставьте полученный токен (без слова `Bearer`).
 4. `POST /auth/logout` с тем же заголовком — выход: сессия удаляется и повторное использование токена возвращает HTTP 401.
 
 Пример:

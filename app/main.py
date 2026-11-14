@@ -4,10 +4,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Path as ApiPath, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Path as ApiPath, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.auth import make_auth_router, validate_token
 from app.config import CSV_PATH, database_url
 from app.csv_import import HEADERS, CsvImportError, import_students_from_csv
 from app.database import make_engine, make_session_factory
@@ -30,6 +31,23 @@ def create_app(url: str | None = None, csv_path: Path | None = None) -> FastAPI:
         engine.dispose()
 
     application = FastAPI(title="Студенты: CRUD", version="1.0.0", lifespan=lifespan)
+
+    application.include_router(make_auth_router(sessions))
+
+    @application.middleware("http")
+    async def require_auth(request: Request, call_next):
+        # Страницы документации и маршрутизатор /auth публичны.
+        public = {"/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
+        if request.url.path in public or request.url.path.startswith("/auth/"):
+            return await call_next(request)
+        authorization = request.headers.get("authorization", "")
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token:
+            return JSONResponse(status_code=401, content={"detail": "Требуется Bearer token"})
+        with sessions() as session:
+            if validate_token(session, token) is None:
+                return JSONResponse(status_code=401, content={"detail": "Недействительный или истёкший токен"})
+        return await call_next(request)
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request, exc):

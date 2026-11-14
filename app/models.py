@@ -30,3 +30,23 @@ class CsvImport(Base):
 
     checksum: Mapped[str] = mapped_column(String(64), primary_key=True)
     records_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class User(Base):
+    """Зарегистрированный пользователь; пароль хранится только в виде хеша."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(250), nullable=False)
+
+
+class UserSession(Base):
+    """Храним хеш токена, чтобы выход немедленно отзывал доступ."""
+
+    __tablename__ = "user_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    expires_at: Mapped[int] = mapped_column(Integer, nullable=False)
